@@ -1,4 +1,4 @@
-# Interface et menus (core 4.4, similaire en 4.3 / 4.5)
+# Interface et menus (core 4.5, similaire en 4.3 / 4.4)
 
 ## Structure du menu principal
 

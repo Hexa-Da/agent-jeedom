@@ -26,10 +26,10 @@ test("un profil vide n'a pas terminé l'onboarding et contient les sections par 
 test("serialize puis parse conserve le contenu et le statut", () => {
   const profile = emptyProfile();
   profile.onboardingDone = true;
-  profile.sections[0].body = "- Box : Atlas\n- Version du core : 4.4";
+  profile.sections[0].body = "- Box : Atlas\n- Version du core : 4.5";
   const parsed = parseProfile(serializeProfile(profile));
   assert.equal(parsed.onboardingDone, true);
-  assert.equal(parsed.sections[0].body, "- Box : Atlas\n- Version du core : 4.4");
+  assert.equal(parsed.sections[0].body, "- Box : Atlas\n- Version du core : 4.5");
 });
 
 test("le statut est reconnu quelle que soit la casse", () => {

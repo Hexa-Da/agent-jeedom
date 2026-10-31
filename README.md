@@ -1,6 +1,6 @@
 # Assistant Jeedom
 
-Un « support Jeedom » personnel, en français, pour quelqu'un qui configure sa maison avec l'interface web de Jeedom (box **Atlas**). Il fonctionne via un chat dans le navigateur par default, pas dans un terminal.
+Un « support Jeedom » personnel, en français, pour quelqu'un qui configure sa maison avec l'interface web de Jeedom (box **Atlas**, core **4.5**). Il fonctionne via un chat dans le navigateur par default, pas dans un terminal.
 
 - Il **conseille uniquement** : il ne fait que guider pas à pas l'utilisateur dans l'interface de Jeedom.
 - Il s'appuie sur une base de connaissances résumée de la documentation officielle (`workspace/socle/`).
