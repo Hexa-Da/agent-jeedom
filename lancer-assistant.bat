@@ -6,13 +6,13 @@ cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js n'est pas installe sur cet ordinateur.
-  echo Contactez la personne qui a installe l'assistant.
+  echo Installez Node.js 22.13 ou plus recent depuis https://nodejs.org puis relancez ce fichier.
   pause
   exit /b 1
 )
 
 if not exist node_modules (
-  echo Premiere utilisation : installation en cours, patientez quelques minutes...
+  echo Premiere utilisation : installation des dépendances en cours...
   call npm install --no-audit --no-fund
   if errorlevel 1 (
     echo L'installation a echoue. Verifiez la connexion internet puis relancez.

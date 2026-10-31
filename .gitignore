@@ -2,8 +2,8 @@
 node_modules/
 .env
 data/
-workspace/profil/*
-workspace/exports/*
+workspace/profil/*.md
+workspace/exports/*.txt
 
 ### Agentic Workflow ###
 .cursor
