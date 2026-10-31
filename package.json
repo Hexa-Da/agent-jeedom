@@ -1,0 +1,23 @@
+{
+  "name": "agent-jeedom",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Assistant support Jeedom (conseil uniquement) base sur le Cursor Agent SDK",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "tsx apps/server/src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"apps/server/src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@cursor/sdk": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

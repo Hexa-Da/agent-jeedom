@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assistant Jeedom</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Assistant Jeedom</h1>
+      <nav>
+        <button id="btn-new" type="button">Nouvelle conversation</button>
+        <button id="btn-profile" type="button">Mon profil</button>
+        <button id="btn-quit" type="button" class="danger">Quitter</button>
+      </nav>
+    </header>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <main id="welcome" class="welcome" hidden>
+      <h2>Bonjour, comment puis-je vous aider avec Jeedom ?</h2>
+      <p>Je peux vous guider pas à pas dans l'interface de Jeedom. Je ne peux rien modifier moi-même : c'est vous qui faites les manipulations, je vous explique.</p>
+      <div class="welcome-actions">
+        <button id="welcome-new" type="button" class="primary">Nouvelle conversation</button>
+        <button id="welcome-resume" type="button" hidden>Reprendre la dernière conversation</button>
+      </div>
+    </main>
+
+    <main id="chat" class="chat" hidden>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <div id="status" class="status" hidden></div>
+      <form id="composer" class="composer">
+        <div id="attachments" class="attachments"></div>
+        <div class="composer-row">
+          <textarea id="input" rows="2" placeholder="Posez votre question… (vous pouvez coller une capture d'écran)"></textarea>
+          <div class="composer-buttons">
+            <button id="btn-attach" type="button" title="Joindre une capture d'écran">Joindre une image</button>
+            <button id="btn-send" type="submit" class="primary">Envoyer</button>
+          </div>
+        </div>
+        <input id="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
+      </form>
+    </main>
+
+    <dialog id="profile-dialog" class="dialog">
+      <form id="profile-form" method="dialog">
+        <h2>Mon profil</h2>
+        <p>Ces informations aident l'assistant à vous répondre. Vous pouvez les corriger à tout moment.</p>
+        <div id="profile-fields"></div>
+        <div class="dialog-actions">
+          <button id="profile-cancel" type="button">Annuler</button>
+          <button id="profile-save" type="submit" class="primary">Enregistrer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,11 @@
+.DS_Store
+node_modules/
+.env
+data/
+workspace/profil/*
+workspace/exports/*
+
+### Agentic Workflow ###
+.cursor
+memoire
+tasks
