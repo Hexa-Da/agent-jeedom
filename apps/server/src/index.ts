@@ -3,7 +3,7 @@ import { createApp } from "./app.js";
 import { buildAgentOptions } from "./agent-options.js";
 import path from "node:path";
 import { HOST, PORT, PROFILE_PATH, ROOT_DIR, SESSION_PATH, WEB_DIR } from "./config.js";
-import { loadContext } from "./prompt.js";
+import { loadContext, loadFinalizePrompt } from "./prompt.js";
 import { FileSessionStore } from "./session-store.js";
 import { ChatSessions, sdkAgentFactory } from "./sessions.js";
 
@@ -27,6 +27,7 @@ const sessions = new ChatSessions({
   factory: sdkAgentFactory,
   buildOptions: buildAgentOptions,
   buildContext: loadContext,
+  finalizePrompt: loadFinalizePrompt(),
   store: new FileSessionStore(SESSION_PATH),
 });
 

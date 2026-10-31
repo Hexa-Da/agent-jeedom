@@ -283,7 +283,12 @@ async function startNewConversation() {
     await refreshState();
     renderSession({ messages: [] });
     setBusy(false);
-    if (!state.onboardingDone) await sendMessage({ text: "Bonjour", hidden: true });
+    if (!state.onboardingDone) {
+      await sendMessage({
+        text: "Lance l'onboarding : lis et suis skills/onboarding/SKILL.md.",
+        hidden: true,
+      });
+    }
   } catch (err) {
     setBusy(false);
     showBanner(err.message, true);

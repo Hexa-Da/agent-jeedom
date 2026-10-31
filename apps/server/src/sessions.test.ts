@@ -122,14 +122,21 @@ test("refuse un second envoi pendant qu'une réponse est en cours", async () => 
 test("nouvelle conversation : met à jour le profil si la conversation était substantielle", async () => {
   const first = new FakeAgent("agent-1");
   const second = new FakeAgent("agent-2");
-  const { sessions } = setup([first, second]);
+  const finalizePrompt = "FINALIZE refine-profile save_profile";
+  const sessions = new ChatSessions({
+    factory: fakeFactory([first, second]),
+    buildOptions: fakeOptions,
+    buildContext: fakeContext,
+    store: new MemoryStore(),
+    finalizePrompt,
+  });
 
   await send(sessions, "Question 1");
   await send(sessions, "Question 2");
   await sessions.startNew();
 
   assert.equal(first.sent.length, 3);
-  assert.match(first.sent[2].text, /save_profile/);
+  assert.equal(first.sent[2].text, finalizePrompt);
   assert.equal(first.closed, true);
   assert.equal(sessions.snapshot().messages.length, 0);
 });

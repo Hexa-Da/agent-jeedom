@@ -44,7 +44,8 @@ export interface SessionSnapshot {
   messages: StoredMessage[];
 }
 
-const FINALIZE_PROMPT =
+/** Fallback si le serveur n'injecte pas le skill refine-profile (ex. tests unitaires). */
+const DEFAULT_FINALIZE_PROMPT =
   "Fin de la conversation (message automatique, l'utilisateur ne le voit pas). " +
   "Si l'utilisateur a mentionné des faits durables sur sa configuration, ses objectifs ou ses préférences, " +
   "mets à jour le profil avec save_profile en respectant les règles (faits sensibles : seulement s'ils ont été confirmés pendant la conversation). " +
@@ -72,6 +73,8 @@ export class ChatSessions {
       buildOptions: () => AgentOptions;
       buildContext: (kind: ContextKind) => string;
       store: SessionStore;
+      /** Corps du message auto de fin (idéalement `loadFinalizePrompt()` = skill refine-profile). */
+      finalizePrompt?: string;
     },
   ) {}
 
@@ -190,7 +193,8 @@ export class ChatSessions {
     this.agent = null;
     try {
       if (this.countUserMessages() >= MIN_USER_MESSAGES_TO_FINALIZE) {
-        const run = await agent.send({ text: FINALIZE_PROMPT });
+        const prompt = this.deps.finalizePrompt ?? DEFAULT_FINALIZE_PROMPT;
+        const run = await agent.send({ text: prompt });
         await run.wait();
       }
     } catch (err) {

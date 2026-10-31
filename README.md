@@ -30,7 +30,8 @@ L'assistant n'écoute que sur cet ordinateur (`127.0.0.1:3737`) : il n'est pas a
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/server/src`     | Serveur Node (sans framework)                                                                                                                           |
 | `apps/web`            | Interface de chat (HTML/JS/CSS, sans build)                                                                                                             |
-| `workspace/AGENTS.md` | Règles de l'agent (ton, conseil uniquement, onboarding) : envoyées avec le premier message de chaque session (avec le profil de l'utilisateur si dispo) |
+| `workspace/AGENTS.md` | Règles de l'agent (ton, conseil uniquement) : jointes au premier message de chaque session (avec le profil) |
+| `workspace/skills/`   | Procédures : `onboarding` (setup profil), `refine-profile` (injecté automatiquement en fin de conversation) |
 | `workspace/socle/`    | Connaissances Jeedom lues par l'agent (base statique)                                                                                                   |
 | `workspace/profil/`   | Profil de l'utilisateur (créé et affiné à l'usage)                                                                                                      |
 | `workspace/exports/`  | Scénarios exporté depuis Jeedom à analyser                                                                                                              |
@@ -41,6 +42,8 @@ L'assistant n'écoute que sur cet ordinateur (`127.0.0.1:3737`) : il n'est pas a
 L'agent est lancé en local avec `cwd = workspace/`, une liste d'outils restreinte (lecture, recherche, listage) et un seul outil personnalisé, `save_profile`, qui n'écrit que `workspace/profil/pere.md`. Aucun shell, aucune édition libre, aucun accès à Jeedom. Ces options sont repassées à chaque reprise de conversation (le SDK ne les persiste pas).
 
 Les consignes ne passent pas par l'option `systemPrompt` du SDK, car elle n'est disponible que sur certains comptes Cursor : elles sont jointes au premier message de la conversation.
+
+Fin de conversation substantielle (≥ 2 messages utilisateur) : le serveur envoie un message automatique qui contient le corps de `workspace/skills/refine-profile/SKILL.md` (le modèle n'a pas à « découvrir » le skill). Si l'onboarding n'est pas terminé, le premier message caché demande explicitement de suivre `skills/onboarding/SKILL.md`.
 
 ### Enrichir les connaissances
 
