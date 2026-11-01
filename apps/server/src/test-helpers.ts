@@ -7,7 +7,12 @@ export const assistantText = (text: string) =>
 
 export const toolCall = (
   name: string,
-  opts: { call_id?: string; status?: "running" | "completed" | "error"; args?: unknown } = {},
+  opts: {
+    call_id?: string;
+    status?: "running" | "completed" | "error";
+    args?: unknown;
+    result?: unknown;
+  } = {},
 ) =>
   ({
     type: "tool_call",
@@ -15,6 +20,7 @@ export const toolCall = (
     call_id: opts.call_id ?? name,
     status: opts.status ?? "running",
     args: opts.args,
+    result: opts.result,
   }) as unknown as SDKMessage;
 
 export interface FakeRunSpec {

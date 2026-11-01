@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   ToolAuditCollector,
   classifyToolCall,
+  errorMessageFromResult,
+  formatToolAuditConsoleLines,
   memoryToolAuditWriter,
   pathsFromArgs,
   type ToolAuditRun,
@@ -87,6 +89,7 @@ test("ToolAuditCollector déduplique par call_id et préfère completed", () => 
   const run = audit.flush("agent-x");
   assert.equal(sink.length, 1);
   assert.equal(run.agentId, "agent-x");
+  assert.equal(run.errorCount, 0);
   assert.deepEqual(run.counts, {
     socle: 1,
     webFetch: 1,
@@ -96,4 +99,66 @@ test("ToolAuditCollector déduplique par call_id et préfère completed", () => 
   });
   assert.equal(run.calls.length, 4);
   assert.equal(run.calls.find((c) => c.bucket === "skill")?.skill, "refine-profile");
+});
+
+test("errorMessageFromResult lit les formes SDK courantes", () => {
+  assert.equal(errorMessageFromResult({ status: "error", error: { message: "timeout" } }), "timeout");
+  assert.equal(errorMessageFromResult({ status: "error", error: "refus" }), "refus");
+  assert.equal(errorMessageFromResult({ message: "boom" }), "boom");
+  assert.equal(errorMessageFromResult("plain"), "plain");
+  assert.equal(errorMessageFromResult({ status: "success", value: {} }), undefined);
+  assert.equal(errorMessageFromResult(null), undefined);
+});
+
+test("ToolAuditCollector distingue webFetch échoué de webFetch absent", () => {
+  const failed: ToolAuditRun[] = [];
+  const failedAudit = new ToolAuditCollector(memoryToolAuditWriter(failed));
+  failedAudit.record({
+    call_id: "wf",
+    name: "webFetch",
+    status: "error",
+    args: { url: "https://doc.jeedom.com/fr_FR/core/" },
+    result: { status: "error", error: { message: "page inaccessible" } },
+  });
+  const failedRun = failedAudit.flush("agent-fail");
+  assert.equal(failedRun.counts.webFetch, 1);
+  assert.equal(failedRun.errorCount, 1);
+  assert.equal(failedRun.calls[0]?.status, "error");
+  assert.equal(failedRun.calls[0]?.error, "page inaccessible");
+
+  const absent: ToolAuditRun[] = [];
+  const absentAudit = new ToolAuditCollector(memoryToolAuditWriter(absent));
+  absentAudit.record({
+    call_id: "s",
+    name: "read",
+    status: "completed",
+    args: { path: "socle/scenarios.md" },
+  });
+  const absentRun = absentAudit.flush("agent-absent");
+  assert.equal(absentRun.counts.webFetch, 0);
+  assert.equal(absentRun.errorCount, 0);
+});
+
+test("formatToolAuditConsoleLines annonce errors=N et détaille chaque échec", () => {
+  const lines = formatToolAuditConsoleLines({
+    ts: "2026-11-01T00:00:00.000Z",
+    agentId: "a",
+    counts: { socle: 1, webFetch: 1, save_profile: 0, skill: 0, other: 0 },
+    errorCount: 1,
+    calls: [
+      { bucket: "socle", name: "read", path: "socle/a.md", status: "completed" },
+      {
+        bucket: "webFetch",
+        name: "webFetch",
+        url: "https://doc.jeedom.com/x",
+        status: "error",
+        error: "timeout",
+      },
+    ],
+  });
+  assert.equal(
+    lines[0],
+    "[tool-audit] socle=1 webFetch=1 save_profile=0 skill=0 other=0 errors=1",
+  );
+  assert.equal(lines[1], "[tool-audit] error webFetch https://doc.jeedom.com/x — timeout");
 });

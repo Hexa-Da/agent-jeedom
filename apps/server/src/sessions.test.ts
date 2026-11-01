@@ -87,9 +87,71 @@ test("audite socle, webFetch, skill et save_profile sur un run", async () => {
     skill: 1,
     other: 0,
   });
+  assert.equal(auditLog[0].errorCount, 0);
   assert.equal(auditLog[0].calls.find((c) => c.bucket === "webFetch")?.url, "https://doc.jeedom.com/fr_FR/core/");
   assert.equal(auditLog[0].calls.find((c) => c.bucket === "skill")?.skill, "onboarding");
   assert.equal(auditLog[0].calls.find((c) => c.bucket === "save_profile")?.contentChars, "profil complet".length);
+});
+
+test("scénario hors socle : audit exige webFetch ≥ 1 quand l'agent fetch la doc", async () => {
+  const auditLog: ToolAuditRun[] = [];
+  const agent = new FakeAgent("agent-hors-socle", {
+    events: [
+      toolCall("read", { call_id: "idx", status: "completed", args: { path: "socle/00-index.md" } }),
+      toolCall("grep", {
+        call_id: "miss",
+        status: "completed",
+        args: { path: "socle", pattern: "widget custom inconnu" },
+      }),
+      toolCall("webFetch", {
+        call_id: "doc",
+        status: "completed",
+        args: { url: "https://doc.jeedom.com/fr_FR/core/4.5/dashboard/" },
+      }),
+      assistantText("D'après la doc en ligne…"),
+    ],
+  });
+  const { sessions } = setup([agent], new MemoryStore(), memoryToolAuditWriter(auditLog));
+
+  await send(sessions, "Comment configurer un widget custom hors fiches socle ?");
+
+  assert.equal(auditLog.length, 1);
+  assert.ok(auditLog[0].counts.webFetch >= 1);
+  assert.equal(auditLog[0].errorCount, 0);
+  assert.equal(
+    auditLog[0].calls.find((c) => c.bucket === "webFetch")?.url,
+    "https://doc.jeedom.com/fr_FR/core/4.5/dashboard/",
+  );
+});
+
+test("audit : webFetch en erreur compte comme appelé (≠ absent) avec status/error", async () => {
+  const auditLog: ToolAuditRun[] = [];
+  const agent = new FakeAgent("agent-fetch-err", {
+    events: [
+      toolCall("read", { call_id: "s", status: "completed", args: { path: "socle/00-index.md" } }),
+      toolCall("webFetch", {
+        call_id: "wf",
+        status: "running",
+        args: { url: "https://doc.jeedom.com/fr_FR/core/save/" },
+      }),
+      toolCall("webFetch", {
+        call_id: "wf",
+        status: "error",
+        args: { url: "https://doc.jeedom.com/fr_FR/core/save/" },
+        result: { status: "error", error: { message: "HTTP 500" } },
+      }),
+      assistantText("La page doc n'a pas chargé."),
+    ],
+  });
+  const { sessions } = setup([agent], new MemoryStore(), memoryToolAuditWriter(auditLog));
+
+  await send(sessions, "Détail Save hors socle");
+
+  assert.equal(auditLog[0].counts.webFetch, 1);
+  assert.equal(auditLog[0].errorCount, 1);
+  const wf = auditLog[0].calls.find((c) => c.bucket === "webFetch");
+  assert.equal(wf?.status, "error");
+  assert.equal(wf?.error, "HTTP 500");
 });
 
 test("les messages cachés (lancement de l'onboarding) ne sont pas exposés", async () => {
