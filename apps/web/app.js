@@ -57,22 +57,39 @@ function showView(view) {
   els.chat.hidden = view !== "chat";
 }
 
-// --- Rendu markdown minimal (le texte est échappé avant toute mise en forme) ---
+// --- Rendu markdown (échappé avant toute mise en forme ; sous-ensemble utile aux réponses agent) ---
 
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+function emphasize(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
+    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>");
+}
+
 function inline(text) {
-  return escapeHtml(text)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  // Protéger code et liens avant gras/italique (sinon les `_` d'une URL cassent le href).
+  const slots = [];
+  const keep = (html) => {
+    slots.push(html);
+    return `\u0000${slots.length - 1}\u0000`;
+  };
+  const protectedText = escapeHtml(text)
+    .replace(/`([^`]+)`/g, (_, code) => keep(`<code>${code}</code>`))
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) =>
+      keep(`<a href="${url.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer">${emphasize(label)}</a>`));
+  return emphasize(protectedText).replace(/\u0000(\d+)\u0000/g, (_, index) => slots[Number(index)]);
 }
 
 function renderBlocks(text) {
   const html = [];
   let list = null;
   let paragraph = [];
+  let quote = [];
   const flushParagraph = () => {
     if (paragraph.length) html.push(`<p>${paragraph.map(inline).join("<br>")}</p>`);
     paragraph = [];
@@ -81,11 +98,34 @@ function renderBlocks(text) {
     if (list) html.push(`<${list.tag}>${list.items.map((item) => `<li>${inline(item)}</li>`).join("")}</${list.tag}>`);
     list = null;
   };
+  const flushQuote = () => {
+    if (quote.length) html.push(`<blockquote>${quote.map(inline).join("<br>")}</blockquote>`);
+    quote = [];
+  };
   for (const line of text.split("\n")) {
+    const heading = /^(#{1,4})\s+(.*)$/.exec(line);
     const ordered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
-    if (ordered || bullet) {
+    const quoteLine = /^>\s?(.*)$/.exec(line);
+    const rule = /^(-{3,}|\*{3,}|_{3,})\s*$/.exec(line);
+    if (heading) {
       flushParagraph();
+      flushList();
+      flushQuote();
+      const level = heading[1].length;
+      html.push(`<h${level}>${inline(heading[2])}</h${level}>`);
+    } else if (rule) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      html.push("<hr>");
+    } else if (quoteLine) {
+      flushParagraph();
+      flushList();
+      quote.push(quoteLine[1]);
+    } else if (ordered || bullet) {
+      flushParagraph();
+      flushQuote();
       const tag = ordered ? "ol" : "ul";
       if (list && list.tag !== tag) flushList();
       list ??= { tag, items: [] };
@@ -93,13 +133,16 @@ function renderBlocks(text) {
     } else if (!line.trim()) {
       flushParagraph();
       flushList();
+      flushQuote();
     } else {
       flushList();
+      flushQuote();
       paragraph.push(line);
     }
   }
   flushParagraph();
   flushList();
+  flushQuote();
   return html.join("");
 }
 
