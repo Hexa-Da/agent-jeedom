@@ -5,7 +5,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export const ROOT_DIR = path.resolve(here, "../../..");
 export const WORKSPACE_DIR = path.join(ROOT_DIR, "workspace");
-export const PROFILE_PATH = path.join(WORKSPACE_DIR, "profil", "pere.md");
+export const PROFILE_PATH = path.join(WORKSPACE_DIR, "profil", "user.md");
 export const AGENTS_PATH = path.join(WORKSPACE_DIR, "AGENTS.md");
 export const REFINE_PROFILE_SKILL_PATH = path.join(
   WORKSPACE_DIR,

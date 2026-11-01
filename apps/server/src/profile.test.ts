@@ -12,7 +12,7 @@ import {
   serializeProfile,
 } from "./profile.js";
 
-const tmpProfilePath = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "jeedom-profile-")), "profil", "pere.md");
+const tmpProfilePath = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), "jeedom-profile-")), "profil", "user.md");
 
 test("un profil vide n'a pas terminé l'onboarding et contient les sections par défaut", () => {
   const profile = emptyProfile();

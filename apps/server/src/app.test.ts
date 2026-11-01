@@ -10,7 +10,7 @@ import { readProfile } from "./profile.js";
 import { ChatSessions } from "./sessions.js";
 import { FakeAgent, MemoryStore, assistantText, fakeFactory, fakeOptions } from "./test-helpers.js";
 
-const profilePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "jeedom-app-")), "profil", "pere.md");
+const profilePath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "jeedom-app-")), "profil", "user.md");
 const agent = new FakeAgent("agent-1", { events: [assistantText("Étape 1. Ouvrez "), assistantText("Outils → Scénarios.")] });
 const sessions = new ChatSessions({ factory: fakeFactory([agent]), buildOptions: fakeOptions, buildContext: () => "", store: new MemoryStore() });
 

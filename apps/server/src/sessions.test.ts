@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ChatSessions, type ChatEvent } from "./sessions.js";
 import { FakeAgent, MemoryStore, assistantText, fakeFactory, fakeOptions, toolCall } from "./test-helpers.js";
-import { memoryToolAuditWriter, type ToolAuditRun, type ToolAuditWriter } from "./tool-audit.js";
+import { memoryToolAuditWriter, type ToolAuditEvent, type ToolAuditWriter } from "./tool-audit.js";
 
 const fakeContext = (kind: "new" | "resume") => (kind === "new" ? "CONSIGNES" : "PROFIL A JOUR");
 
@@ -60,7 +60,7 @@ test("annonce la consultation de la documentation et sépare les textes avant/ap
 });
 
 test("audite socle, webFetch, skill et save_profile sur un run", async () => {
-  const auditLog: ToolAuditRun[] = [];
+  const auditLog: ToolAuditEvent[] = [];
   const agent = new FakeAgent("agent-audit", {
     events: [
       toolCall("read", { call_id: "a", status: "running", args: { path: "socle/scenarios.md" } }),
@@ -79,22 +79,19 @@ test("audite socle, webFetch, skill et save_profile sur un run", async () => {
     events.filter((e) => e.type === "status").map((e) => (e.type === "status" ? e.text : "")),
     ["Je consulte la documentation…", "Je consulte la doc en ligne…", "Je mets à jour votre profil…"],
   );
-  assert.equal(auditLog.length, 1);
-  assert.deepEqual(auditLog[0].counts, {
-    socle: 1,
-    webFetch: 1,
-    save_profile: 1,
-    skill: 1,
-    other: 0,
-  });
-  assert.equal(auditLog[0].errorCount, 0);
-  assert.equal(auditLog[0].calls.find((c) => c.bucket === "webFetch")?.url, "https://doc.jeedom.com/fr_FR/core/");
-  assert.equal(auditLog[0].calls.find((c) => c.bucket === "skill")?.skill, "onboarding");
-  assert.equal(auditLog[0].calls.find((c) => c.bucket === "save_profile")?.contentChars, "profil complet".length);
+  assert.equal(auditLog.length, 4);
+  assert.ok(auditLog.every((e) => e.runId === auditLog[0].runId && e.agentId === "agent-audit"));
+  assert.equal(auditLog.filter((e) => e.kind === "socle").length, 1);
+  assert.equal(auditLog.filter((e) => e.kind === "webFetch").length, 1);
+  assert.equal(auditLog.filter((e) => e.kind === "skill").length, 1);
+  assert.equal(auditLog.filter((e) => e.kind === "save_profile").length, 1);
+  assert.equal(auditLog.find((e) => e.kind === "webFetch")?.url, "https://doc.jeedom.com/fr_FR/core/");
+  assert.equal(auditLog.find((e) => e.kind === "skill")?.skill, "onboarding");
+  assert.equal(auditLog.find((e) => e.kind === "save_profile")?.contentChars, "profil complet".length);
 });
 
 test("scénario hors socle : audit exige webFetch ≥ 1 quand l'agent fetch la doc", async () => {
-  const auditLog: ToolAuditRun[] = [];
+  const auditLog: ToolAuditEvent[] = [];
   const agent = new FakeAgent("agent-hors-socle", {
     events: [
       toolCall("read", { call_id: "idx", status: "completed", args: { path: "socle/00-index.md" } }),
@@ -115,17 +112,16 @@ test("scénario hors socle : audit exige webFetch ≥ 1 quand l'agent fetch la d
 
   await send(sessions, "Comment configurer un widget custom hors fiches socle ?");
 
-  assert.equal(auditLog.length, 1);
-  assert.ok(auditLog[0].counts.webFetch >= 1);
-  assert.equal(auditLog[0].errorCount, 0);
+  assert.ok(auditLog.filter((e) => e.kind === "webFetch").length >= 1);
   assert.equal(
-    auditLog[0].calls.find((c) => c.bucket === "webFetch")?.url,
+    auditLog.find((e) => e.kind === "webFetch")?.url,
     "https://doc.jeedom.com/fr_FR/core/4.5/dashboard/",
   );
+  assert.ok(auditLog.every((e) => e.status !== "error"));
 });
 
 test("audit : webFetch en erreur compte comme appelé (≠ absent) avec status/error", async () => {
-  const auditLog: ToolAuditRun[] = [];
+  const auditLog: ToolAuditEvent[] = [];
   const agent = new FakeAgent("agent-fetch-err", {
     events: [
       toolCall("read", { call_id: "s", status: "completed", args: { path: "socle/00-index.md" } }),
@@ -147,11 +143,10 @@ test("audit : webFetch en erreur compte comme appelé (≠ absent) avec status/e
 
   await send(sessions, "Détail Save hors socle");
 
-  assert.equal(auditLog[0].counts.webFetch, 1);
-  assert.equal(auditLog[0].errorCount, 1);
-  const wf = auditLog[0].calls.find((c) => c.bucket === "webFetch");
-  assert.equal(wf?.status, "error");
-  assert.equal(wf?.error, "HTTP 500");
+  const wf = auditLog.filter((e) => e.kind === "webFetch");
+  assert.equal(wf.length, 1);
+  assert.equal(wf[0]?.status, "error");
+  assert.equal(wf[0]?.error, "HTTP 500");
 });
 
 test("les messages cachés (lancement de l'onboarding) ne sont pas exposés", async () => {
@@ -226,7 +221,22 @@ test("refuse un second envoi pendant qu'une réponse est en cours", async () => 
 });
 
 test("nouvelle conversation : met à jour le profil si la conversation était substantielle", async () => {
-  const first = new FakeAgent("agent-1");
+  const auditLog: ToolAuditEvent[] = [];
+  const first = new FakeAgent(
+    "agent-1",
+    { events: [assistantText("OK")] },
+    { events: [assistantText("OK")] },
+    {
+      events: [
+        toolCall("save_profile", {
+          call_id: "sp",
+          status: "completed",
+          args: { content: "## Statut\n- Onboarding terminé : oui" },
+        }),
+        assistantText("OK"),
+      ],
+    },
+  );
   const second = new FakeAgent("agent-2");
   const finalizePrompt = "FINALIZE refine-profile save_profile";
   const sessions = new ChatSessions({
@@ -235,6 +245,7 @@ test("nouvelle conversation : met à jour le profil si la conversation était su
     buildContext: fakeContext,
     store: new MemoryStore(),
     finalizePrompt,
+    toolAuditWriter: memoryToolAuditWriter(auditLog),
   });
 
   await send(sessions, "Question 1");
@@ -245,6 +256,12 @@ test("nouvelle conversation : met à jour le profil si la conversation était su
   assert.equal(first.sent[2].text, finalizePrompt);
   assert.equal(first.closed, true);
   assert.equal(sessions.snapshot().messages.length, 0);
+
+  const finalizeEvents = auditLog.filter((e) => e.agentId === "agent-1");
+  assert.ok(finalizeEvents.length >= 2);
+  assert.ok(finalizeEvents.every((e) => e.runId === finalizeEvents[0].runId));
+  assert.ok(finalizeEvents.some((e) => e.kind === "skill" && e.skill === "refine-profile"));
+  assert.ok(finalizeEvents.some((e) => e.kind === "save_profile"));
 });
 
 test("nouvelle conversation : pas de mise à jour du profil après un échange trivial", async () => {

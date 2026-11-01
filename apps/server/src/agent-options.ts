@@ -5,7 +5,7 @@ import { saveProfileMarkdown } from "./profile.js";
 
 /**
  * Conseil uniquement : l'agent ne reçoit que des outils de lecture sur workspace/,
- * webFetch (doc / pages web en lecture), et save_profile (qui n'écrit que profil/pere.md).
+ * webFetch (doc / pages web en lecture), et save_profile (qui n'écrit que profil/user.md).
  * Aucun shell, aucune édition libre.
  * Ces options ne sont pas persistées par le SDK : on les repasse aussi à Agent.resume.
  */

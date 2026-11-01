@@ -43,7 +43,7 @@ L'agent est lancé en local avec `cwd = workspace/`, une liste d'outils restrein
 
 Les consignes ne passent pas par l'option `systemPrompt` du SDK, car elle n'est disponible que sur certains comptes Cursor : elles sont jointes au premier message de la conversation.
 
-À chaque réponse réussie, le serveur classe les appels d'outils (socle, `webFetch`, `save_profile`, skills, autres), note le status SDK (`completed` / `error`) et un éventuel message d'échec, écrit une ligne dans `data/tool-audit.jsonl` et un résumé dans la console (`[tool-audit] …`, avec `errors=N` si un outil a échoué).
+À chaque réponse réussie (et à la finalisation de conversation), le serveur journalise chaque appel d'outil utile (socle, `webFetch`, `save_profile`, skill nommé) en une ligne NDJSON horodatée dans `data/tool-audit.jsonl`.
 
 Fin de conversation substantielle (≥ 2 messages utilisateur) : le serveur envoie un message automatique qui contient le corps de `workspace/skills/refine-profile/SKILL.md` (le modèle n'a pas à « découvrir » le skill). Si l'onboarding n'est pas terminé, le premier message caché demande explicitement de suivre `skills/onboarding/SKILL.md`.
 

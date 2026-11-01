@@ -201,8 +201,16 @@ export class ChatSessions {
     try {
       if (this.countUserMessages() >= MIN_USER_MESSAGES_TO_FINALIZE) {
         const prompt = this.deps.finalizePrompt ?? DEFAULT_FINALIZE_PROMPT;
+        const audit = new ToolAuditCollector(this.deps.toolAuditWriter);
+        audit.recordInjectedSkill("refine-profile");
         const run = await agent.send({ text: prompt });
+        for await (const event of run.stream()) {
+          if (event.type === "tool_call") {
+            audit.record(event);
+          }
+        }
         await run.wait();
+        audit.flush(agent.agentId);
       }
     } catch (err) {
       console.error("[assistant] mise à jour du profil impossible :", err);

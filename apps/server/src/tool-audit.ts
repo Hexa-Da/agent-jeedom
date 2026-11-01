@@ -1,47 +1,45 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { TOOL_AUDIT_PATH } from "./config.js";
 
 export { TOOL_AUDIT_PATH };
 
-export type ToolAuditBucket = "socle" | "webFetch" | "save_profile" | "skill" | "other";
+/** Kinds retenus dans le journal (pas de `other`). */
+export type ToolAuditKind = "socle" | "webFetch" | "save_profile" | "skill";
 
 export type ToolAuditStatus = "running" | "completed" | "error";
 
-export interface ToolAuditCall {
-  bucket: ToolAuditBucket;
+/** Classification d'un appel avant flush (sans métadonnées de run). */
+export interface ClassifiedToolCall {
+  kind: ToolAuditKind;
   name: string;
   path?: string;
   url?: string;
   skill?: string;
   contentChars?: number;
-  /** Dernier status SDK connu (`running` | `completed` | `error`). */
   status?: ToolAuditStatus;
-  /** Message d'échec si status=error (extrait défensif de `result`). */
   error?: string;
 }
 
-export type ToolAuditCounts = Record<ToolAuditBucket, number>;
-
-export interface ToolAuditRun {
+/** Une ligne NDJSON = un appel utile d'un run. */
+export interface ToolAuditEvent {
   ts: string;
+  runId: string;
   agentId: string;
-  counts: ToolAuditCounts;
-  /** Nombre d'appels dont le dernier status est `error` (≠ non appelé). */
-  errorCount: number;
-  calls: ToolAuditCall[];
+  kind: ToolAuditKind;
+  name: string;
+  path?: string;
+  url?: string;
+  skill?: string;
+  contentChars?: number;
+  status?: ToolAuditStatus;
+  error?: string;
 }
 
-export type ToolAuditWriter = (run: ToolAuditRun) => void;
+export type ToolAuditWriter = (event: ToolAuditEvent) => void;
 
 const FILE_TOOLS = /^(read|grep|glob|ls)$/i;
-const EMPTY_COUNTS = (): ToolAuditCounts => ({
-  socle: 0,
-  webFetch: 0,
-  save_profile: 0,
-  skill: 0,
-  other: 0,
-});
 
 /** Extrait des chemins plausibles depuis args SDK (schéma non stable). */
 export function pathsFromArgs(args: unknown): string[] {
@@ -139,34 +137,36 @@ function normalizeStatus(status: unknown): ToolAuditStatus | undefined {
   return undefined;
 }
 
-/** Classe un appel outil (ordre : webFetch → save_profile → socle → skill → other). */
-export function classifyToolCall(name: string, args?: unknown): ToolAuditCall {
+/**
+ * Classe un appel outil (ordre : webFetch → save_profile → socle → skill).
+ * Renvoie `null` pour les appels hors périmètre (`other` : non journalisés).
+ */
+export function classifyToolCall(name: string, args?: unknown): ClassifiedToolCall | null {
   if (/webfetch/i.test(name)) {
-    return { bucket: "webFetch", name, url: stringField(args, "url") };
+    return { kind: "webFetch", name, url: stringField(args, "url") };
   }
   if (/save_profile/i.test(name)) {
     const chars = contentChars(args);
     return chars === undefined
-      ? { bucket: "save_profile", name }
-      : { bucket: "save_profile", name, contentChars: chars };
+      ? { kind: "save_profile", name }
+      : { kind: "save_profile", name, contentChars: chars };
   }
 
   const paths = pathsFromArgs(args);
   if (FILE_TOOLS.test(name)) {
     const soclePath = firstMatchingPath(paths, "socle");
-    if (soclePath) return { bucket: "socle", name, path: soclePath };
+    if (soclePath) return { kind: "socle", name, path: soclePath };
 
     const skillPath = firstMatchingPath(paths, "skills");
     if (skillPath) {
       const skill = skillSlugFromPath(skillPath);
       return skill
-        ? { bucket: "skill", name, path: skillPath, skill }
-        : { bucket: "skill", name, path: skillPath };
+        ? { kind: "skill", name, path: skillPath, skill }
+        : { kind: "skill", name, path: skillPath };
     }
   }
 
-  const pathHint = paths[0];
-  return pathHint ? { bucket: "other", name, path: pathHint } : { bucket: "other", name };
+  return null;
 }
 
 export interface ToolCallLike {
@@ -177,7 +177,7 @@ export interface ToolCallLike {
   result?: unknown;
 }
 
-function withOutcome(call: ToolAuditCall, event: ToolCallLike): ToolAuditCall {
+function withOutcome(call: ClassifiedToolCall, event: ToolCallLike): ClassifiedToolCall {
   const status = normalizeStatus(event.status);
   const error =
     errorMessageFromResult(event.result) ??
@@ -189,80 +189,139 @@ function withOutcome(call: ToolAuditCall, event: ToolCallLike): ToolAuditCall {
   };
 }
 
-/** Résumé console : counts + distinction erreurs (appelé mais échoué ≠ absent). */
-export function formatToolAuditConsoleLines(run: ToolAuditRun): string[] {
-  const { counts, errorCount, calls } = run;
+export interface ToolAuditFlushSummary {
+  runId: string;
+  agentId: string;
+  events: ToolAuditEvent[];
+  socle: number;
+  webFetch: number;
+  save_profile: number;
+  skills: string[];
+  errorCount: number;
+}
+
+/** Résumé console : counts utiles + skills nommés (pas de other). */
+export function formatToolAuditConsoleLines(summary: ToolAuditFlushSummary): string[] {
+  const skillsPart = summary.skills.length > 0 ? ` skills=${summary.skills.join(",")}` : "";
   const lines = [
-    `[tool-audit] socle=${counts.socle} webFetch=${counts.webFetch} save_profile=${counts.save_profile} skill=${counts.skill} other=${counts.other}` +
-      (errorCount > 0 ? ` errors=${errorCount}` : ""),
+    `[tool-audit] run=${summary.runId.slice(0, 8)} socle=${summary.socle} webFetch=${summary.webFetch} save_profile=${summary.save_profile}${skillsPart}` +
+      (summary.errorCount > 0 ? ` errors=${summary.errorCount}` : ""),
   ];
-  for (const call of calls) {
-    if (call.status !== "error") continue;
-    const target = call.url ?? call.path ?? call.skill ?? call.name;
-    lines.push(`[tool-audit] error ${call.bucket} ${target}${call.error ? ` — ${call.error}` : ""}`);
+  for (const event of summary.events) {
+    if (event.status !== "error") continue;
+    const target = event.url ?? event.path ?? event.skill ?? event.name;
+    lines.push(`[tool-audit] error ${event.kind} ${target}${event.error ? ` — ${event.error}` : ""}`);
   }
   return lines;
 }
 
 /**
  * Collecteur par run : déduplique par call_id (préfère completed),
- * produit counts + calls, puis flush via writer + log console.
+ * ignore `other`, flush = une ligne NDJSON par appel retenu.
  */
 export class ToolAuditCollector {
-  private readonly byId = new Map<string, { call: ToolAuditCall; status?: string }>();
+  readonly runId: string;
+  private readonly byId = new Map<string, { call: ClassifiedToolCall; status?: string; ts: string }>();
   private anon = 0;
 
-  constructor(private readonly writer: ToolAuditWriter = appendToolAuditFile) {}
+  constructor(
+    private readonly writer: ToolAuditWriter = appendToolAuditEvent,
+    runId?: string,
+  ) {
+    this.runId = runId ?? randomUUID();
+  }
+
+  /** Skill injecté côté serveur (ex. refine-profile au finalize), sans `read` SDK. */
+  recordInjectedSkill(skill: string, callId = `injected-${skill}`): void {
+    this.byId.set(callId, {
+      call: {
+        kind: "skill",
+        name: "read",
+        path: `skills/${skill}/SKILL.md`,
+        skill,
+        status: "completed",
+      },
+      status: "completed",
+      ts: new Date().toISOString(),
+    });
+  }
 
   record(event: ToolCallLike): void {
-    const call = withOutcome(classifyToolCall(event.name, event.args), event);
+    const classified = classifyToolCall(event.name, event.args);
+    if (!classified) return;
+    const call = withOutcome(classified, event);
     const id = event.call_id?.trim() || `anon-${++this.anon}`;
     const prev = this.byId.get(id);
     if (!prev || event.status === "completed" || (event.status === "error" && prev.status !== "completed")) {
-      this.byId.set(id, { call, status: event.status });
+      this.byId.set(id, { call, status: event.status, ts: new Date().toISOString() });
     }
   }
 
-  snapshot(): { counts: ToolAuditCounts; calls: ToolAuditCall[]; errorCount: number } {
-    const calls = [...this.byId.values()].map((entry) => entry.call);
-    const counts = EMPTY_COUNTS();
+  snapshot(): ToolAuditFlushSummary {
+    const events: ToolAuditEvent[] = [];
+    let socle = 0;
+    let webFetch = 0;
+    let save_profile = 0;
     let errorCount = 0;
-    for (const call of calls) {
-      counts[call.bucket] += 1;
+    const skills: string[] = [];
+    const seenSkills = new Set<string>();
+
+    for (const entry of this.byId.values()) {
+      const { call, ts } = entry;
+      if (call.kind === "socle") socle += 1;
+      else if (call.kind === "webFetch") webFetch += 1;
+      else if (call.kind === "save_profile") save_profile += 1;
+      else if (call.kind === "skill" && call.skill && !seenSkills.has(call.skill)) {
+        seenSkills.add(call.skill);
+        skills.push(call.skill);
+      }
       if (call.status === "error") errorCount += 1;
+      events.push({
+        ts,
+        runId: this.runId,
+        agentId: "",
+        kind: call.kind,
+        name: call.name,
+        ...(call.path ? { path: call.path } : {}),
+        ...(call.url ? { url: call.url } : {}),
+        ...(call.skill ? { skill: call.skill } : {}),
+        ...(call.contentChars !== undefined ? { contentChars: call.contentChars } : {}),
+        ...(call.status ? { status: call.status } : {}),
+        ...(call.error ? { error: call.error } : {}),
+      });
     }
-    return { counts, calls, errorCount };
+
+    return { runId: this.runId, agentId: "", events, socle, webFetch, save_profile, skills, errorCount };
   }
 
-  flush(agentId: string): ToolAuditRun {
-    const { counts, calls, errorCount } = this.snapshot();
-    const run: ToolAuditRun = {
-      ts: new Date().toISOString(),
-      agentId,
-      counts,
-      errorCount,
-      calls,
-    };
-    try {
-      this.writer(run);
-    } catch (err) {
-      console.error("[tool-audit] écriture impossible :", err);
+  flush(agentId: string): ToolAuditFlushSummary {
+    const summary = this.snapshot();
+    summary.agentId = agentId;
+    for (const event of summary.events) {
+      event.agentId = agentId;
+      try {
+        this.writer(event);
+      } catch (err) {
+        console.error("[tool-audit] écriture impossible :", err);
+      }
     }
-    for (const line of formatToolAuditConsoleLines(run)) {
-      console.log(line);
+    if (summary.events.length > 0) {
+      for (const line of formatToolAuditConsoleLines(summary)) {
+        console.log(line);
+      }
     }
-    return run;
+    return summary;
   }
 }
 
-export function appendToolAuditFile(run: ToolAuditRun, filePath = TOOL_AUDIT_PATH): void {
+export function appendToolAuditEvent(event: ToolAuditEvent, filePath = TOOL_AUDIT_PATH): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.appendFileSync(filePath, `${JSON.stringify(run)}\n`, "utf8");
+  fs.appendFileSync(filePath, `${JSON.stringify(event)}\n`, "utf8");
 }
 
 /** Writer mémoire pour les tests. */
-export function memoryToolAuditWriter(sink: ToolAuditRun[]): ToolAuditWriter {
-  return (run) => {
-    sink.push(run);
+export function memoryToolAuditWriter(sink: ToolAuditEvent[]): ToolAuditWriter {
+  return (event) => {
+    sink.push(event);
   };
 }

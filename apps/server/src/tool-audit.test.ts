@@ -7,7 +7,8 @@ import {
   formatToolAuditConsoleLines,
   memoryToolAuditWriter,
   pathsFromArgs,
-  type ToolAuditRun,
+  type ToolAuditEvent,
+  type ToolAuditFlushSummary,
 } from "./tool-audit.js";
 
 test("pathsFromArgs lit path / target_directory et scanne en secours", () => {
@@ -18,42 +19,35 @@ test("pathsFromArgs lit path / target_directory et scanne en secours", () => {
   assert.deepEqual(pathsFromArgs("nope"), []);
 });
 
-test("classifyToolCall ordonne webFetch, save_profile, socle, skill, other", () => {
+test("classifyToolCall ordonne webFetch, save_profile, socle, skill ; other → null", () => {
   assert.deepEqual(classifyToolCall("webFetch", { url: "https://doc.jeedom.com/x" }), {
-    bucket: "webFetch",
+    kind: "webFetch",
     name: "webFetch",
     url: "https://doc.jeedom.com/x",
   });
   assert.deepEqual(classifyToolCall("save_profile", { content: "abc" }), {
-    bucket: "save_profile",
+    kind: "save_profile",
     name: "save_profile",
     contentChars: 3,
   });
   assert.deepEqual(classifyToolCall("read", { path: "socle/scenarios.md" }), {
-    bucket: "socle",
+    kind: "socle",
     name: "read",
     path: "socle/scenarios.md",
   });
   assert.deepEqual(classifyToolCall("read", { path: "skills/onboarding/SKILL.md" }), {
-    bucket: "skill",
+    kind: "skill",
     name: "read",
     path: "skills/onboarding/SKILL.md",
     skill: "onboarding",
   });
-  assert.deepEqual(classifyToolCall("read", { path: "AGENTS.md" }), {
-    bucket: "other",
-    name: "read",
-    path: "AGENTS.md",
-  });
-  assert.deepEqual(classifyToolCall("grep", { pattern: "foo" }), {
-    bucket: "other",
-    name: "grep",
-  });
+  assert.equal(classifyToolCall("read", { path: "AGENTS.md" }), null);
+  assert.equal(classifyToolCall("grep", { pattern: "foo" }), null);
 });
 
-test("ToolAuditCollector déduplique par call_id et préfère completed", () => {
-  const sink: ToolAuditRun[] = [];
-  const audit = new ToolAuditCollector(memoryToolAuditWriter(sink));
+test("ToolAuditCollector écrit une ligne par appel avec runId commun et ignore other", () => {
+  const sink: ToolAuditEvent[] = [];
+  const audit = new ToolAuditCollector(memoryToolAuditWriter(sink), "run-fixed");
 
   audit.record({
     call_id: "1",
@@ -85,20 +79,45 @@ test("ToolAuditCollector déduplique par call_id et préfère completed", () => 
     status: "completed",
     args: { path: "skills/refine-profile/SKILL.md" },
   });
-
-  const run = audit.flush("agent-x");
-  assert.equal(sink.length, 1);
-  assert.equal(run.agentId, "agent-x");
-  assert.equal(run.errorCount, 0);
-  assert.deepEqual(run.counts, {
-    socle: 1,
-    webFetch: 1,
-    save_profile: 1,
-    skill: 1,
-    other: 0,
+  audit.record({
+    call_id: "5",
+    name: "grep",
+    status: "completed",
+    args: { path: "README.md", pattern: "x" },
   });
-  assert.equal(run.calls.length, 4);
-  assert.equal(run.calls.find((c) => c.bucket === "skill")?.skill, "refine-profile");
+
+  const summary = audit.flush("agent-x");
+  assert.equal(summary.runId, "run-fixed");
+  assert.equal(sink.length, 4);
+  assert.ok(sink.every((e) => e.runId === "run-fixed" && e.agentId === "agent-x"));
+  assert.equal(summary.socle, 1);
+  assert.equal(summary.webFetch, 1);
+  assert.equal(summary.save_profile, 1);
+  assert.deepEqual(summary.skills, ["refine-profile"]);
+  assert.equal(summary.errorCount, 0);
+  assert.ok(sink.every((e) => typeof e.ts === "string" && e.ts.length > 0));
+  assert.equal(sink.find((e) => e.kind === "skill")?.skill, "refine-profile");
+});
+
+test("recordInjectedSkill journalise refine-profile sans read SDK", () => {
+  const sink: ToolAuditEvent[] = [];
+  const audit = new ToolAuditCollector(memoryToolAuditWriter(sink), "run-fin");
+  audit.recordInjectedSkill("refine-profile");
+  const summary = audit.flush("agent-f");
+  assert.equal(sink.length, 1);
+  assert.equal(sink[0].kind, "skill");
+  assert.equal(sink[0].skill, "refine-profile");
+  assert.equal(sink[0].status, "completed");
+  assert.equal(summary.skills[0], "refine-profile");
+});
+
+test("flush d'un run vide n'écrit rien", () => {
+  const sink: ToolAuditEvent[] = [];
+  const audit = new ToolAuditCollector(memoryToolAuditWriter(sink));
+  audit.record({ call_id: "x", name: "mcp", status: "completed" });
+  const summary = audit.flush("agent-empty");
+  assert.equal(sink.length, 0);
+  assert.equal(summary.events.length, 0);
 });
 
 test("errorMessageFromResult lit les formes SDK courantes", () => {
@@ -111,7 +130,7 @@ test("errorMessageFromResult lit les formes SDK courantes", () => {
 });
 
 test("ToolAuditCollector distingue webFetch échoué de webFetch absent", () => {
-  const failed: ToolAuditRun[] = [];
+  const failed: ToolAuditEvent[] = [];
   const failedAudit = new ToolAuditCollector(memoryToolAuditWriter(failed));
   failedAudit.record({
     call_id: "wf",
@@ -120,13 +139,13 @@ test("ToolAuditCollector distingue webFetch échoué de webFetch absent", () => 
     args: { url: "https://doc.jeedom.com/fr_FR/core/" },
     result: { status: "error", error: { message: "page inaccessible" } },
   });
-  const failedRun = failedAudit.flush("agent-fail");
-  assert.equal(failedRun.counts.webFetch, 1);
-  assert.equal(failedRun.errorCount, 1);
-  assert.equal(failedRun.calls[0]?.status, "error");
-  assert.equal(failedRun.calls[0]?.error, "page inaccessible");
+  const failedSummary = failedAudit.flush("agent-fail");
+  assert.equal(failedSummary.webFetch, 1);
+  assert.equal(failedSummary.errorCount, 1);
+  assert.equal(failed[0]?.status, "error");
+  assert.equal(failed[0]?.error, "page inaccessible");
 
-  const absent: ToolAuditRun[] = [];
+  const absent: ToolAuditEvent[] = [];
   const absentAudit = new ToolAuditCollector(memoryToolAuditWriter(absent));
   absentAudit.record({
     call_id: "s",
@@ -134,31 +153,43 @@ test("ToolAuditCollector distingue webFetch échoué de webFetch absent", () => 
     status: "completed",
     args: { path: "socle/scenarios.md" },
   });
-  const absentRun = absentAudit.flush("agent-absent");
-  assert.equal(absentRun.counts.webFetch, 0);
-  assert.equal(absentRun.errorCount, 0);
+  const absentSummary = absentAudit.flush("agent-absent");
+  assert.equal(absentSummary.webFetch, 0);
+  assert.equal(absentSummary.errorCount, 0);
 });
 
 test("formatToolAuditConsoleLines annonce errors=N et détaille chaque échec", () => {
-  const lines = formatToolAuditConsoleLines({
-    ts: "2026-11-01T00:00:00.000Z",
+  const summary: ToolAuditFlushSummary = {
+    runId: "abcdefgh-ijkl",
     agentId: "a",
-    counts: { socle: 1, webFetch: 1, save_profile: 0, skill: 0, other: 0 },
+    socle: 1,
+    webFetch: 1,
+    save_profile: 0,
+    skills: [],
     errorCount: 1,
-    calls: [
-      { bucket: "socle", name: "read", path: "socle/a.md", status: "completed" },
+    events: [
       {
-        bucket: "webFetch",
+        ts: "2026-11-01T00:00:00.000Z",
+        runId: "abcdefgh-ijkl",
+        agentId: "a",
+        kind: "socle",
+        name: "read",
+        path: "socle/a.md",
+        status: "completed",
+      },
+      {
+        ts: "2026-11-01T00:00:01.000Z",
+        runId: "abcdefgh-ijkl",
+        agentId: "a",
+        kind: "webFetch",
         name: "webFetch",
         url: "https://doc.jeedom.com/x",
         status: "error",
         error: "timeout",
       },
     ],
-  });
-  assert.equal(
-    lines[0],
-    "[tool-audit] socle=1 webFetch=1 save_profile=0 skill=0 other=0 errors=1",
-  );
+  };
+  const lines = formatToolAuditConsoleLines(summary);
+  assert.equal(lines[0], "[tool-audit] run=abcdefgh socle=1 webFetch=1 save_profile=0 errors=1");
   assert.equal(lines[1], "[tool-audit] error webFetch https://doc.jeedom.com/x — timeout");
 });
