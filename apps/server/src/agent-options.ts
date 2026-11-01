@@ -4,8 +4,9 @@ import { MissingApiKeyError } from "./errors.js";
 import { saveProfileMarkdown } from "./profile.js";
 
 /**
- * Conseil uniquement : l'agent ne reçoit que des outils de lecture sur workspace/
- * et l'outil save_profile (qui n'écrit que profil/pere.md). Aucun shell, aucune édition libre.
+ * Conseil uniquement : l'agent ne reçoit que des outils de lecture sur workspace/,
+ * webFetch (doc / pages web en lecture), et save_profile (qui n'écrit que profil/pere.md).
+ * Aucun shell, aucune édition libre.
  * Ces options ne sont pas persistées par le SDK : on les repasse aussi à Agent.resume.
  */
 export function buildAgentOptions(): AgentOptions {
@@ -15,7 +16,7 @@ export function buildAgentOptions(): AgentOptions {
   return {
     apiKey,
     model: { id: MODEL_ID },
-    tools: ["read", "grep", "glob", "ls", "mcp"],
+    tools: ["read", "grep", "glob", "ls", "webFetch", "mcp"],
     local: {
       cwd: WORKSPACE_DIR,
       customTools: {
