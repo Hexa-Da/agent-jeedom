@@ -39,7 +39,7 @@ Un scénario est le « cerveau » de la domotique : il lance des actions (fermer
 - **Boucle** : répétition (durée maximale 1 heure dans les versions récentes).
 - **Dans** : lance les actions dans X minutes, en arrière-plan (non bloquant).
 - **À** : lance les actions à une heure donnée `hhmm` (ex. `0030` pour 0 h 30). Non bloquant.
-- **Tant que** (versions récentes) : répète tant qu'une condition est vraie.
+- **Tant que** (depuis le core 4.6) : répète tant qu'une condition est vraie.
 - **Code** : code PHP, puissant mais risqué : à réserver aux utilisateurs à l'aise.
 - **Commentaire** : notes dans le scénario.
 

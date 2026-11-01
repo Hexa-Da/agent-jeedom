@@ -2,11 +2,11 @@
 
 ## name: onboarding
 description: >-
-  Questionnaire initial pour créer le profil Jeedom (Atlas / core 4.5).
+  Questionnaire initial pour créer le profil Jeedom (Atlas / core 4.6.1).
 
 # Onboarding profil utilisateur
 
-Tu personnalises l'aide pour un utilisateur amateur sur box **Jeedom Atlas**, core **4.5**.
+Tu personnalises l'aide pour un utilisateur amateur sur box **Jeedom Atlas**, core **4.6.1**.
 
 ## Déroulement
 
@@ -19,6 +19,6 @@ Tu personnalises l'aide pour un utilisateur amateur sur box **Jeedom Atlas**, co
    5. Ce qu'il veut réussir avec Jeedom en priorité.
    6. Ce qui le bloque en ce moment.
 3. Ne redemande ni la box ni la version du core, sauf s'il indique une mise à jour ou un écart.
-4. Après la dernière réponse (ou s'il veut arrêter) : récapitule en quelques lignes (en reprenant Atlas / 4.5).
-5. Lis `skills/refine-profile/SKILL.md` (section Structure), puis enregistre avec `save_profile` : profil **complet** selon ce gabarit, « Onboarding terminé : oui », `Box : Atlas`, `Version du core : 4.5`.
+4. Après la dernière réponse (ou s'il veut arrêter) : récapitule en quelques lignes (en reprenant Atlas / 4.6.1).
+5. Lis `skills/refine-profile/SKILL.md` (section Structure), puis enregistre avec `save_profile` : profil **complet** selon ce gabarit, « Onboarding terminé : oui », `Box : Atlas`, `Version du core : 4.6.1`.
 6. Enchaîne sur son point bloquant.

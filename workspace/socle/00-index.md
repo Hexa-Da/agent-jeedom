@@ -1,6 +1,6 @@
 # Socle de connaissances Jeedom (v1)
 
-Sources : documentation officielle Jeedom (cible terrain : Atlas, core **4.5** ; docs 4.3 à 4.5, boxes Atlas/Smart/Luna) résumée en français. Les noms de menus peuvent légèrement varier selon la version du core : en cas de doute, demander une capture d'écran.
+Sources : documentation officielle Jeedom (cible terrain : Atlas, core **4.6.1** ; docs 4.4 à 4.6, boxes Atlas/Smart/Luna) résumée en français. Les noms de menus peuvent légèrement varier selon la version du core : en cas de doute, demander une capture d'écran.
 
 | Fiche | Quand la lire |
 |---|---|

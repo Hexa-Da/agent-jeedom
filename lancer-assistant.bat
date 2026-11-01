@@ -6,7 +6,7 @@ cd /d "%~dp0"
 where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js n'est pas installe sur cet ordinateur.
-  echo Installez Node.js 22.13 ou plus recent depuis https://nodejs.org puis relancez ce fichier.
+  echo Executer : winget install OpenJS.NodeJS.LTS --accept-package-agreements dans un PowerShell administrateur puis relancez ce fichier.
   pause
   exit /b 1
 )

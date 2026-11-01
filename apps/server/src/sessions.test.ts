@@ -103,7 +103,7 @@ test("scénario hors socle : audit exige webFetch ≥ 1 quand l'agent fetch la d
       toolCall("webFetch", {
         call_id: "doc",
         status: "completed",
-        args: { url: "https://doc.jeedom.com/fr_FR/core/4.5/dashboard/" },
+        args: { url: "https://doc.jeedom.com/fr_FR/core/4.6/dashboard/" },
       }),
       assistantText("D'après la doc en ligne…"),
     ],
@@ -115,7 +115,7 @@ test("scénario hors socle : audit exige webFetch ≥ 1 quand l'agent fetch la d
   assert.ok(auditLog.filter((e) => e.kind === "webFetch").length >= 1);
   assert.equal(
     auditLog.find((e) => e.kind === "webFetch")?.url,
-    "https://doc.jeedom.com/fr_FR/core/4.5/dashboard/",
+    "https://doc.jeedom.com/fr_FR/core/4.6/dashboard/",
   );
   assert.ok(auditLog.every((e) => e.status !== "error"));
 });
