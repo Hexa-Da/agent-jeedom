@@ -85,8 +85,32 @@ function inline(text) {
   return emphasize(protectedText).replace(/\u0000(\d+)\u0000/g, (_, index) => slots[Number(index)]);
 }
 
+function splitTableCells(line) {
+  let body = line.trim();
+  if (body.startsWith("|")) body = body.slice(1);
+  if (body.endsWith("|")) body = body.slice(0, -1);
+  return body.split("|").map((cell) => cell.trim());
+}
+
+function isTableRow(line) {
+  return /^\s*\|(.+)\|\s*$/.test(line);
+}
+
+function isTableSeparator(line) {
+  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+}
+
+function renderTable(header, rows) {
+  const th = header.map((cell) => `<th>${inline(cell)}</th>`).join("");
+  const body = rows
+    .map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join("")}</tr>`)
+    .join("");
+  return `<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
 function renderBlocks(text) {
   const html = [];
+  const lines = text.split("\n");
   let list = null;
   let paragraph = [];
   let quote = [];
@@ -102,7 +126,23 @@ function renderBlocks(text) {
     if (quote.length) html.push(`<blockquote>${quote.map(inline).join("<br>")}</blockquote>`);
     quote = [];
   };
-  for (const line of text.split("\n")) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (isTableRow(line) && i + 1 < lines.length && isTableSeparator(lines[i + 1])) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      const header = splitTableCells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && isTableRow(lines[i]) && !isTableSeparator(lines[i])) {
+        rows.push(splitTableCells(lines[i]));
+        i += 1;
+      }
+      i -= 1;
+      html.push(renderTable(header, rows));
+      continue;
+    }
     const heading = /^(#{1,4})\s+(.*)$/.exec(line);
     const ordered = /^\s*\d+[.)]\s+(.*)$/.exec(line);
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);

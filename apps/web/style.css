@@ -148,8 +148,38 @@ button.danger {
 .message ul,
 .message blockquote,
 .message pre,
-.message hr {
+.message hr,
+.message .table-wrap {
   margin: 0 0 0.6rem;
+}
+
+.message .table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.message table {
+  width: max-content;
+  max-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.message th,
+.message td {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.message th {
+  background: #eef1f5;
+  font-weight: 650;
+}
+
+.message tbody tr:nth-child(even) {
+  background: #f8fafc;
 }
 
 .message h1,
