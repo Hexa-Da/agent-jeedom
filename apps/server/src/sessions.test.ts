@@ -2,12 +2,23 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ChatSessions, type ChatEvent } from "./sessions.js";
 import { FakeAgent, MemoryStore, assistantText, fakeFactory, fakeOptions, toolCall } from "./test-helpers.js";
+import { memoryToolAuditWriter, type ToolAuditRun, type ToolAuditWriter } from "./tool-audit.js";
 
 const fakeContext = (kind: "new" | "resume") => (kind === "new" ? "CONSIGNES" : "PROFIL A JOUR");
 
-function setup(agents: FakeAgent[], store = new MemoryStore()) {
+function setup(
+  agents: FakeAgent[],
+  store = new MemoryStore(),
+  toolAuditWriter: ToolAuditWriter = () => undefined,
+) {
   const factory = fakeFactory(agents);
-  const sessions = new ChatSessions({ factory, buildOptions: fakeOptions, buildContext: fakeContext, store });
+  const sessions = new ChatSessions({
+    factory,
+    buildOptions: fakeOptions,
+    buildContext: fakeContext,
+    store,
+    toolAuditWriter,
+  });
   return { sessions, factory, store };
 }
 
@@ -46,6 +57,39 @@ test("annonce la consultation de la documentation et sépare les textes avant/ap
   assert.deepEqual(events.filter((e) => e.type === "status"), [{ type: "status", text: "Je consulte la documentation…" }]);
   const reply = sessions.snapshot().messages.at(-1)?.text;
   assert.equal(reply, "Je regarde.\n\nVoici la réponse.");
+});
+
+test("audite socle, webFetch, skill et save_profile sur un run", async () => {
+  const auditLog: ToolAuditRun[] = [];
+  const agent = new FakeAgent("agent-audit", {
+    events: [
+      toolCall("read", { call_id: "a", status: "running", args: { path: "socle/scenarios.md" } }),
+      toolCall("read", { call_id: "a", status: "completed", args: { path: "socle/scenarios.md" } }),
+      toolCall("webFetch", { call_id: "b", status: "completed", args: { url: "https://doc.jeedom.com/fr_FR/core/" } }),
+      toolCall("read", { call_id: "c", status: "completed", args: { path: "skills/onboarding/SKILL.md" } }),
+      toolCall("save_profile", { call_id: "d", status: "completed", args: { content: "profil complet" } }),
+      assistantText("Réponse."),
+    ],
+  });
+  const { sessions } = setup([agent], new MemoryStore(), memoryToolAuditWriter(auditLog));
+
+  const events = await send(sessions, "Aide-moi");
+
+  assert.deepEqual(
+    events.filter((e) => e.type === "status").map((e) => (e.type === "status" ? e.text : "")),
+    ["Je consulte la documentation…", "Je consulte la doc en ligne…", "Je mets à jour votre profil…"],
+  );
+  assert.equal(auditLog.length, 1);
+  assert.deepEqual(auditLog[0].counts, {
+    socle: 1,
+    webFetch: 1,
+    save_profile: 1,
+    skill: 1,
+    other: 0,
+  });
+  assert.equal(auditLog[0].calls.find((c) => c.bucket === "webFetch")?.url, "https://doc.jeedom.com/fr_FR/core/");
+  assert.equal(auditLog[0].calls.find((c) => c.bucket === "skill")?.skill, "onboarding");
+  assert.equal(auditLog[0].calls.find((c) => c.bucket === "save_profile")?.contentChars, "profil complet".length);
 });
 
 test("les messages cachés (lancement de l'onboarding) ne sont pas exposés", async () => {

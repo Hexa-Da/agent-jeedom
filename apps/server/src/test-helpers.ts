@@ -5,7 +5,17 @@ import type { AgentFactory, AgentLike, RunLike } from "./sessions.js";
 export const assistantText = (text: string) =>
   ({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text }] } }) as unknown as SDKMessage;
 
-export const toolCall = (name: string) => ({ type: "tool_call", name, status: "running" }) as unknown as SDKMessage;
+export const toolCall = (
+  name: string,
+  opts: { call_id?: string; status?: "running" | "completed" | "error"; args?: unknown } = {},
+) =>
+  ({
+    type: "tool_call",
+    name,
+    call_id: opts.call_id ?? name,
+    status: opts.status ?? "running",
+    args: opts.args,
+  }) as unknown as SDKMessage;
 
 export interface FakeRunSpec {
   events?: SDKMessage[];

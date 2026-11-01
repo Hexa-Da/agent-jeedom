@@ -2,6 +2,7 @@ import { Agent } from "@cursor/sdk";
 import type { AgentOptions, SDKImage, SDKMessage, SDKUserMessage } from "@cursor/sdk";
 import { BusyError, describeError } from "./errors.js";
 import type { SessionStore, StoredMessage } from "./session-store.js";
+import { ToolAuditCollector, type ToolAuditWriter } from "./tool-audit.js";
 
 /** Sous-ensemble de l'API du SDK utilisé ici ; permet de tester sans clé API. */
 export interface RunLike {
@@ -55,6 +56,7 @@ const MIN_USER_MESSAGES_TO_FINALIZE = 2;
 
 const STATUS_LABELS: Array<[RegExp, string]> = [
   [/save_profile/i, "Je mets à jour votre profil…"],
+  [/webfetch/i, "Je consulte la doc en ligne…"],
   [/read|grep|glob|ls/i, "Je consulte la documentation…"],
 ];
 
@@ -75,6 +77,8 @@ export class ChatSessions {
       store: SessionStore;
       /** Corps du message auto de fin (idéalement `loadFinalizePrompt()` = skill refine-profile). */
       finalizePrompt?: string;
+      /** Append NDJSON d'audit des outils (défaut : fichier data/tool-audit.jsonl). */
+      toolAuditWriter?: ToolAuditWriter;
     },
   ) {}
 
@@ -137,6 +141,7 @@ export class ChatSessions {
       let reply = "";
       let afterTool = false;
       const announced = new Set<string>();
+      const audit = new ToolAuditCollector(this.deps.toolAuditWriter);
       const append = (text: string) => {
         const chunk = afterTool && reply ? `\n\n${text}` : text;
         afterTool = false;
@@ -152,6 +157,7 @@ export class ChatSessions {
             }
           } else if (event.type === "tool_call") {
             afterTool = true;
+            audit.record(event);
             const label = STATUS_LABELS.find(([pattern]) => pattern.test(event.name))?.[1];
             if (label && !announced.has(label)) {
               announced.add(label);
@@ -164,6 +170,7 @@ export class ChatSessions {
           throw new Error(result.error?.message ?? "L'assistant n'a pas pu terminer sa réponse.");
         }
         if (!reply && result.result) append(result.result);
+        audit.flush(this.agent!.agentId);
       } finally {
         signal?.removeEventListener("abort", onAbort);
       }

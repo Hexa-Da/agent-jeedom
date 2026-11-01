@@ -15,6 +15,7 @@ export const REFINE_PROFILE_SKILL_PATH = path.join(
 );
 export const DATA_DIR = path.join(ROOT_DIR, "data");
 export const SESSION_PATH = path.join(DATA_DIR, "last-session.json");
+export const TOOL_AUDIT_PATH = path.join(DATA_DIR, "tool-audit.jsonl");
 export const WEB_DIR = path.join(ROOT_DIR, "apps", "web");
 
 export const HOST = "127.0.0.1";

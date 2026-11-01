@@ -26,22 +26,24 @@ L'assistant n'écoute que sur cet ordinateur (`127.0.0.1:3737`) : il n'est pas a
 
 ### Structure du repo
 
-| Chemin                | Rôle                                                                                                                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/server/src`     | Serveur Node (sans framework)                                                                                                                           |
-| `apps/web`            | Interface de chat (HTML/JS/CSS, sans build)                                                                                                             |
+| Chemin                | Rôle                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `apps/server/src`     | Serveur Node (sans framework)                                                                               |
+| `apps/web`            | Interface de chat (HTML/JS/CSS, sans build)                                                                 |
 | `workspace/AGENTS.md` | Règles de l'agent (ton, conseil uniquement) : jointes au premier message de chaque session (avec le profil) |
 | `workspace/skills/`   | Procédures : `onboarding` (setup profil), `refine-profile` (injecté automatiquement en fin de conversation) |
-| `workspace/socle/`    | Connaissances Jeedom lues par l'agent (base statique)                                                                                                   |
-| `workspace/profil/`   | Profil de l'utilisateur (créé et affiné à l'usage)                                                                                                      |
-| `workspace/exports/`  | Scénarios exporté depuis Jeedom à analyser                                                                                                              |
-| `data/`               | Stocke uniquement la dernière conversation                                                                                                              |
+| `workspace/socle/`    | Connaissances Jeedom lues par l'agent (base statique)                                                       |
+| `workspace/profil/`   | Profil de l'utilisateur (créé et affiné à l'usage)                                                          |
+| `workspace/exports/`  | Scénarios exporté depuis Jeedom à analyser                                                                  |
+| `data/`               | Historique de la dernière conversation (`last-session.json`) et logs des outils (`tool-audit.jsonl`)        |
 
 ### Details à garder en tête
 
-L'agent est lancé en local avec `cwd = workspace/`, une liste d'outils restreinte (lecture, recherche, listage) et un seul outil personnalisé, `save_profile`, qui n'écrit que `workspace/profil/pere.md`. Aucun shell, aucune édition libre, aucun accès à Jeedom. Ces options sont repassées à chaque reprise de conversation (le SDK ne les persiste pas).
+L'agent est lancé en local avec `cwd = workspace/`, une liste d'outils restreinte (lecture, recherche, listage, `webFetch`) et un seul outil personnalisé, `save_profile`, qui n'écrit que `workspace/profil/*.md`. Aucun shell, aucune édition libre, aucun accès à Jeedom. Ces options sont repassées à chaque reprise de conversation (le SDK ne les persiste pas).
 
 Les consignes ne passent pas par l'option `systemPrompt` du SDK, car elle n'est disponible que sur certains comptes Cursor : elles sont jointes au premier message de la conversation.
+
+À chaque réponse réussie, le serveur classe les appels d'outils (socle, `webFetch`, `save_profile`, skills, autres), écrit une ligne dans `data/tool-audit.jsonl` et un résumé dans la console du terminal (`[tool-audit] …`).
 
 Fin de conversation substantielle (≥ 2 messages utilisateur) : le serveur envoie un message automatique qui contient le corps de `workspace/skills/refine-profile/SKILL.md` (le modèle n'a pas à « découvrir » le skill). Si l'onboarding n'est pas terminé, le premier message caché demande explicitement de suivre `skills/onboarding/SKILL.md`.
 
